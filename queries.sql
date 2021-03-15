@@ -132,48 +132,84 @@ ROLLBACK;
 
 
 -- 5.
-CREATE OR REPLACE FUNCTION CaseCountFixer
-RETURNS TRIGGER --CaseCountTracker
-LANGUAGE plpgsql
+DROP PROCEDURE IF EXISTS CaseCountFixer();
+CREATE OR REPLACE PROCEDURE CaseCountFixer()
+LANGUAGE SQL
 AS $$
-DECLARE r Locations%rowtype;
-BEGIN 
-    FOR r IN
-        SELECT L.LocationID, L.caseCount 
-        FROM Locations L
-    LOOP
-        r.caseCount = (SELECT COUNT(C.CaseID)
-                        FROM Cases C
-                        WHERE C.LocationID = r.LocationID) 
-
-    RETURN NEW;
-    --ATH
-    --TODO: correct the caseCount
+    UPDATE Locations L
+    SET caseCount = (
+        SELECT COUNT(C.CaseID)
+        FROM Cases C 
+        WHERE C.LocationID = L.LocationID);
 $$;
+
+BEGIN;
+CALL CaseCountFixer();
+SELECT * FROM Locations;
+
+ROLLBACK;
 
 
 
 -- 6. Create a trigger CaseCountTracker that whenever a new case is created, deleted or its
 -- location attribute is updated, runs CaseCountFixer
+
+CREATE OR REPLACE FUNCTION TriggerCallsCaseCountFixer()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    Call CaseCountFixer();
+    RETURN NEW;
+END;
+$$;
+
+
+
+
 DROP TRIGGER IF EXISTS CaseCountTracker ON Cases;
 CREATE TRIGGER CaseCountTracker
-    AFTER INSERT OR DELETE ON Cases --OR AFTER UPDATE ON Cases.LocationID 
+    AFTER INSERT OR DELETE OR UPDATE OF locationID ON Cases  --OR AFTER UPDATE ON Cases.LocationID 
     FOR EACH ROW
-    EXECUTE FUNCTION CaseCountFixer();
+    EXECUTE FUNCTION TriggerCallsCaseCountFixer();
 
 
 
-
+SELECT * FROM Cases WHERE CaseID = 1;
 
 
 BEGIN;
-INSERT INTO Cases
-VALUES(DEFAULT,'test case', false, 2021,1,2);
 
+SELECT * FROM Locations;
+INSERT INTO Cases(CaseID, title, isClosed, year, AgentID, LocationID)
+VALUES(DEFAULT,'test case', false, 2021,1,91);
+--ROLLBACK;
+
+SELECT * FROM Locations;
+SELECT * FROM Cases;
+
+UPDATE Cases 
+SET isClosed = false
+WHERE CaseID = 1;
+SELECT * FROM Cases;
+--SELECT * FROM Locations;
+
+--DELETE FROM InvolvedIn
+--WHERE CaseID = 1;
+
+--DELETE FROM Cases
+--WHERE CaseID = 1;
+
+--SELECT * FROM Locations;
 
 ROLLBACK;
 
 --7.
+CREATE OR REPLACE FUNCTION StartInvestigation()
+
+
+
+
 
 
 --8.

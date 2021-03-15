@@ -40,13 +40,16 @@ SELECT * FROM top3subjectsStokkseyri;
 
 -- 3.
 CREATE OR REPLACE VIEW allNemeses AS
-SELECT A.AgentID, A.codename, P.PersonID, P.name, COUNT(P.PersonID)
+SELECT DISTINCT ON (P.PersonId) A.AgentID, A.codename, P.PersonID, P.name
 FROM People P
 INNER JOIN InvolvedIn I ON I.PersonID = P.PersonID
 INNER JOIN Agents A ON I.AgentID = A.AgentID
 GROUP BY P.PersonID, A.AgentID, I.isCulprit
 HAVING I.isCulprit = TRUE AND COUNT(I.isCulprit = TRUE) > 1
-ORDER BY COUNT(A.AgentID);
+ORDER BY P.PersonID, COUNT(A.AgentID) DESC;
+
+--DROP VIEW IF EXISTS allNemeses;
+
 
 SELECT * FROM allNemeses;
 
@@ -58,16 +61,74 @@ VALUES(374, 2, 44, true);
 
 SELECT * FROM allNemeses;
 
+INSERT INTO InvolvedIn
+VALUES(374, 3, 22, true);
+SELECT * FROM allNemeses;
+INSERT INTO InvolvedIn
+VALUES(374, 4, 44, true);
+SELECT * FROM allNemeses;
+
 ROLLBACK;
 
-SELECT * FROM Cases C WHERE C.AgentID =22;
 
 
 
 -- 4.
 
-CREATE OR REPLACE PROCEDURE InsertPerson
--- check daematimaverkefni
+CREATE OR REPLACE PROCEDURE InsertPerson(
+    Pname_in varchar(255),
+    Profession_in varchar(255),
+    Gender_in varchar(255),
+    Location_in varchar(255)
+)
+AS
+$$
+BEGIN
+    IF(trim(Pname_in) = '') THEN
+        RAISE EXCEPTION 'Name can not be empty!' USING ERRCODE = '45000';
+    END IF;
+    
+    IF(Gender_in NOT IN (SELECT G.gender FROM Genders G)) THEN
+        RAISE EXCEPTION 'Gender must be valid (in the gender table)!' USING ERRCODE = '45000';
+    END IF;
+
+    IF(Location_in NOT IN (SELECT L.location FROM Locations L)) THEN
+        RAISE EXCEPTION 'Location must be valid (in the location table)!' USING ERRCODE = '45000';
+    END IF;
+
+
+    IF(Profession_in NOT IN (SELECT P.description FROM Professions P )) THEN
+        INSERT INTO Professions(ProfessionID, description)
+        VALUES(default, Profession_in);
+    END IF;
+
+    INSERT INTO PEOPLE(PersonID, name, ProfessionID, GenderID, LocationID)
+    VALUES(default, Pname_in, 
+            (SELECT P.ProfessionID FROM Professions P WHERE P.description = Profession_in),
+            (SELECT G.GenderID FROM Genders G WHERE G.gender = Gender_in),
+            (SELECT L.LocationID FROM Locations L WHERE L.location = Location_in));
+
+END;
+$$
+LANGUAGE plpgsql;
+
+
+BEGIN;
+CALL InsertPerson('thoka', 'voffi', 'Female', 'Akranes');
+
+SELECT * FROM PEOPLE
+WHERE name = 'thoka';
+SELECT * FROM Professions;
+--ROLLBACK;
+
+CALL InsertPerson('  ', 'voffi', 'Female', 'Akranes');
+SELECT * FROM PEOPLE
+WHERE name = '  ';
+SELECT * FROM Genders;
+
+ROLLBACK;
+
+
 
 
 -- 5.

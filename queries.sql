@@ -221,7 +221,7 @@ agents_location INT := (SELECT P.locationID
 BEGIN
 INSERT INTO Cases
 VALUES
-(default, title_in, FALSE, 2021, agentID_in, person_location);
+(default, title_in, FALSE, (SELECT date_part('year', now())), agentID_in, person_location);
 IF (agents_location = person_location) THEN 
 INSERT INTO InvolvedIn
     VALUES
@@ -255,10 +255,12 @@ AS $$
 BEGIN
     -- the cases the old agent led goes to the agent with the fewest cases to lead
     UPDATE CASES C
-    SET AgentID = (SELECT C1.AgentID 
-                    FROM Cases C1
-                    GROUP BY C1.AgentID
-                    ORDER BY COUNT(C1.AgentID) ASC LIMIT 1)
+    SET AgentID = (SELECT A.AgentID
+                    FROM Agents A 
+                    INNER JOIN Cases Ca ON Ca.AgentID = A.AgentID
+                    GROUP BY A.AgentID 
+                    ORDER BY COUNT(A.AgentID), A.designation ASC 
+                    LIMIT 1)
     WHERE C.AgentID = OLD.AgentID;
 
     -- The people who the agent was investigating will not be investigated by anyone anymore
@@ -277,7 +279,6 @@ END;
 $$;
 
 
-SELECt * FROM Agents WHERE AgentID = 1;
 
 
 CREATE OR REPLACE FUNCTION afterDeleteArrangements()
@@ -294,15 +295,24 @@ BEGIN
 
     -- Adding the agent back to the database with status ghost and reversed codename after it is deleted
     INSERT INTO Agents(AgentID, codename, designation, killLicense, status, secretIdentity, GenderID)
-    VALUES(default, OLD.codename, OLD.designation, OLD.killLicense, 'ghost', NULL, OLD.GenderID);
+    VALUES(default, recurReverseCodename(OLD.codename), OLD.designation, OLD.killLicense, 'ghost', NULL, OLD.GenderID);
 
     RETURN OLD;
 END;
 $$;
 
 
-CREATE OR REPLACE FUNCTION reverseCodename()
-RETURNS 
+CREATE OR REPLACE FUNCTION recurReverseCodename(oldCodename varchar(255))
+RETURNS varchar(255)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF (length(oldCodename) = 1) THEN RETURN oldCodename;
+    END IF;
+    RETURN CONCAT(SUBSTRING(oldCodename, length(oldCodename) , 1), recurReverseCodename(SUBSTRING(oldCodename, 1, length(oldCodename)-1)));
+
+END;
+$$;
 
 
 
@@ -340,6 +350,60 @@ SELECT C1.AgentID, COUNT(C1.AgentID)
                     ORDER BY COUNT(C1.AgentID) ASC;
 
 SELECT CaseID FROM Cases where AgentID =1;
-SELECT CaseID FROM Cases where AgentID =73;
+SELECT * FROM Agents where status = 'ghost';
+
+
+
+DELETE FROM Agents A WHERE A.status = 'ghost';
+SELECT * FROM Agents where status = 'ghost';
 
 ROLLBACK;
+
+
+
+
+-- 9.
+CREATE OR REPLACE FUNCTION yearsSinceCaseInTown(town VARCHAR(255))
+RETURNS INT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    townID INT;
+    yearNow INT;
+BEGIN
+    townID := (SELECT L.locationID 
+                FROM Locations L   
+                WHERE L.location = town);
+
+    yearNow := (SELECT date_part('year', now()));
+
+    RETURN yearNow - (SELECT C.year 
+            FROM Cases C 
+            WHERE C.locationID = townID AND C.year <= yearNow
+            ORDER BY C.year DESC Limit 1);
+
+END;
+$$;
+
+BEGIN;
+SELECT * FROM yearsSinceCaseInTown('Fosshóll');
+SELECT * FROM Cases where locationID = 47;
+ROLLBACK;
+
+
+
+-- 10.
+
+CREATE OR REPLACE FUNCTION FrenemiesOfFrenemies(PersonID_in INT)
+RETURNS table
+LANGUAGE plpgsql
+AS $$
+BEGIN
+     RETURN (SELECT * 
+            FROM InvolvedIn I
+            WHERE)
+
+
+
+END;
+$$;

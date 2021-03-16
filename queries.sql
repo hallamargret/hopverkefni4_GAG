@@ -205,7 +205,41 @@ SELECT * FROM Cases;
 ROLLBACK;
 
 --7.
-CREATE OR REPLACE FUNCTION StartInvestigation()
+CREATE OR REPLACE function startInvestigation(
+    agentID_in INT,
+    personID_in INT,
+    title_in varchar(255)) 
+RETURNS void AS $$
+DECLARE
+person_location INT := (SELECT P.locationID
+                        FROM People P
+                        WHERE P.PersonID = personID_in);
+agents_location INT := (SELECT P.locationID
+                        FROM Agents A
+                        INNER JOIN People P ON P.PersonID = A.secretIdentity
+                        WHERE A.AgentID = agentID_in);
+BEGIN
+INSERT INTO Cases
+VALUES
+(default, title_in, FALSE, 2021, agentID_in, person_location);
+IF (agents_location = person_location) THEN 
+INSERT INTO InvolvedIn
+    VALUES
+    (personID_in, (
+        SELECT MAX(CaseID)
+        FROM Cases
+    ), agentID_in, FALSE);
+ELSE
+INSERT INTO InvolvedIn
+    VALUES
+    (personID_in, (
+        SELECT MAX(CaseID)
+        FROM Cases
+    ), agentID_in, NULL);
+END IF;
+END;
+$$
+LANGUAGE plpgsql;
 
 
 

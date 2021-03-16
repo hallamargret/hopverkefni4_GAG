@@ -247,3 +247,99 @@ LANGUAGE plpgsql;
 
 
 --8.
+
+CREATE OR REPLACE FUNCTION defectiveAgentArrangements()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- the cases the old agent led goes to the agent with the fewest cases to lead
+    UPDATE CASES C
+    SET AgentID = (SELECT C1.AgentID 
+                    FROM Cases C1
+                    GROUP BY C1.AgentID
+                    ORDER BY COUNT(C1.AgentID) ASC LIMIT 1)
+    WHERE C.AgentID = OLD.AgentID;
+
+    -- The people who the agent was investigating will not be investigated by anyone anymore
+    -- but is still in the InvolvedIn table
+    UPDATE InvolvedIn I 
+    SET AgentID = NULL
+    WHERE I.AgentID = OLD.AgentID;
+
+
+    -- Remove any secret identity of the agent from the invloved in table
+    DELETE FROM InvolvedIn Iin
+    WHERE Iin.PersonID = OLD.secretIdentity;
+
+    RETURN OLD;
+END;
+$$;
+
+
+SELECt * FROM Agents WHERE AgentID = 1;
+
+
+CREATE OR REPLACE FUNCTION afterDeleteArrangements()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+
+
+-- Delete any secret identity of the agent 
+    DELETE FROM People P 
+    WHERE P.PersonID = OLD.secretIdentity;
+
+
+    -- Adding the agent back to the database with status ghost and reversed codename after it is deleted
+    INSERT INTO Agents(AgentID, codename, designation, killLicense, status, secretIdentity, GenderID)
+    VALUES(default, OLD.codename, OLD.designation, OLD.killLicense, 'ghost', NULL, OLD.GenderID);
+
+    RETURN OLD;
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION reverseCodename()
+RETURNS 
+
+
+
+DROP TRIGGER IF EXISTS defectiveAgentTrigger ON Agents;
+CREATE TRIGGER defectiveAgentTrigger
+    BEFORE DELETE ON Agents
+    FOR EACH ROW
+    EXECUTE FUNCTION defectiveAgentArrangements();
+
+
+DROP TRIGGER IF EXISTS afterDefectiveAgentTrigger ON Agents;
+CREATE TRIGGER afterDefectiveAgentTrigger
+    AFTER DELETE ON Agents
+    FOR EACH ROW
+    EXECUTE FUNCTION afterDeleteArrangements();
+
+
+BEGIN;
+
+SELECT * FROM Agents A WHERE A.AgentID = 1;
+
+SELECT CaseID FROM Cases where AgentID =1;
+SELECT CaseID FROM Cases where AgentID =73;
+
+DELETE FROM Agents A WHERE A.AgentID = 1;
+SELECT * FROM Agents A WHERE A.secretIdentity = 4941;
+SELECT * FROM Cases C where C.AgentID = 1;
+SELECT * FROM InvolvedIn WHERe PersonID = 4941;
+
+SELECT * FROM Agents WHERE AgentID = 73;
+
+SELECT C1.AgentID, COUNT(C1.AgentID)
+                    FROM Cases C1
+                    GROUP BY C1.AgentID
+                    ORDER BY COUNT(C1.AgentID) ASC;
+
+SELECT CaseID FROM Cases where AgentID =1;
+SELECT CaseID FROM Cases where AgentID =73;
+
+ROLLBACK;

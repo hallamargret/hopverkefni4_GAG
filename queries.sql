@@ -11,6 +11,8 @@ CREATE OR REPLACE FUNCTION mostCommonLocationAgentCaseLed()
 
 
 
+
+
 CREATE OR REPLACE VIEW AS infoAgent AS
 SELECT A.codename, A.status, COUNT(C.CaseID)
 FROM Agents A
@@ -252,16 +254,25 @@ CREATE OR REPLACE FUNCTION defectiveAgentArrangements()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
+DECLARE currCase INT;
 BEGIN
     -- the cases the old agent led goes to the agent with the fewest cases to lead
-    UPDATE CASES C
-    SET AgentID = (SELECT A.AgentID
-                    FROM Agents A 
-                    INNER JOIN Cases Ca ON Ca.AgentID = A.AgentID
-                    GROUP BY A.AgentID 
-                    ORDER BY COUNT(A.AgentID), A.designation ASC 
-                    LIMIT 1)
-    WHERE C.AgentID = OLD.AgentID;
+    
+    -- ath for loop go through cases and set it to agent with fewest cases each time
+    -- FOR 
+    FOR currCase in (SELECT C.CaseID 
+                    FROM Cases C 
+                    WHERE C.AgentID = OLD.AgentID) loop
+        UPDATE CASES C
+        SET AgentID = (SELECT A.AgentID
+                        FROM Agents A 
+                        INNER JOIN Cases Ca ON Ca.AgentID = A.AgentID
+                        GROUP BY A.AgentID 
+                        HAVING A.AgentID != OLD.AgentID
+                        ORDER BY COUNT(A.AgentID), A.designation ASC 
+                        LIMIT 1)
+        WHERE C.AgentID = currCase;
+    END LOOP;
 
     -- The people who the agent was investigating will not be investigated by anyone anymore
     -- but is still in the InvolvedIn table

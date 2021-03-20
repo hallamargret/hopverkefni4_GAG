@@ -5,24 +5,20 @@
 select
     1 as Query;
 
-CREATE OR REPLACE FUNCTION mostCommonLocationAgentCaseLed()
-
-
-
-
-
-
-
-CREATE OR REPLACE VIEW AS infoAgent AS
-SELECT A.codename, A.status, COUNT(C.CaseID)
+CREATE OR REPLACE VIEW infoAgent AS
+SELECT A.codename, A.status, COUNT(C.CaseID) AS "Number of cases", ARRAY(SELECT L1.location 
+                                                    FROM Locations L1
+                                                    INNER JOIN Cases C1 ON C1.locationID = L1.locationID
+                                                    GROUP BY C1.AgentID, L1.LocationID HAVING C1.AgentID = A.AgentID AND COUNT(C1.LocationID) >= ALL (
+                                                    SELECT COUNT(C2.locationID)
+                                                    FROM Cases C2
+                                                    GROUP BY C2.AgentID, C2.locationID HAVING C2.AgentID = A.AgentID
+)) AS "Most common locations led cases"
 FROM Agents A
 NATURAL JOIN Cases C
-GROUP BY A.AgentID
-HAVING ()
-
+GROUP BY A.AgentID;
 
 SELECT * FROM infoAgent;
-
 
 
 select
@@ -406,13 +402,19 @@ ROLLBACK;
 -- 10.
 
 CREATE OR REPLACE FUNCTION FrenemiesOfFrenemies(PersonID_in INT)
-RETURNS table
+RETURNS TABLE(personID INT, name VARCHAR(255), proffID INT, genderID INT, LocID INT)
 LANGUAGE plpgsql
 AS $$
 BEGIN
-     RETURN (SELECT * 
-            FROM InvolvedIn I
-            WHERE)
+    FOR r in (SELECT distinct P.PersonID
+    FROM InvolvedIn I
+    INNER JOIN People P ON P.PersonID = I.PersonID
+    WHERE I.CaseID IN (SELECT I2.CaseID
+                        FROM InvolvedIn I2
+                        WHERE I2.PersonID = personID_in))
+    FOR r in return_table loop
+
+    
 
 
 
